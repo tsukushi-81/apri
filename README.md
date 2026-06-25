@@ -1,6 +1,6 @@
 # 天候と服装のシステム
 
-> 天気・気温・湿度をもとに、その日に適した服装を提案するFlutterモバイルアプリの要件定義ドキュメント
+> 天気・気温・湿度をもとに、その日に適した服装を提案するReact PWA（Progressive Web App）の要件定義ドキュメント
 
 ---
 
@@ -24,7 +24,7 @@
 天候と服装のシステム
 
 ### 目的
-天気・気温・湿度をもとに、その日に適した服装をユーザーに提案するFlutterモバイルアプリを開発する。朝・昼・夜の時間帯別に提案を行い、ユーザーが気に入った服装をメモとして端末内に保存できる。
+天気・気温・湿度をもとに、その日に適した服装をユーザーに提案するReact PWA（Progressive Web App）を開発する。朝・昼・夜の時間帯別に提案を行い、ユーザーが気に入った服装をメモとしてブラウザのローカルストレージに保存できる。Service Workerによるオフライン対応とホーム画面へのインストール（Add to Home Screen）に対応する。
 
 ### 作らないもの（非目標）
 - 服装のコーディネート画像表示・ブランド推薦
@@ -39,11 +39,30 @@
 
 | 項目 | 内容 |
 |------|------|
-| フレームワーク | Flutter（Dart） |
-| 対応プラットフォーム | iOS / Android |
+| フレームワーク | React（JavaScript / TypeScript） |
+| PWA対応 | Vite PWA Plugin または Create React App（Workbox） |
+| 対応プラットフォーム | モダンブラウザ（Chrome / Firefox / Safari / Edge）+ ホーム画面インストール |
 | 天気データAPI | [Open-Meteo](https://open-meteo.com/)（APIキー不要・完全無料） |
-| ローカル保存 | SharedPreferences または SQLite |
-| バックエンド | なし（端末ローカルのみ） |
+| ローカル保存 | localStorage（Web Storage API） |
+| オフラインキャッシュ | Service Worker + Cache API（Workbox） |
+| バックエンド | なし（クライアントサイドのみ） |
+| 位置情報取得 | Geolocation API（ブラウザ標準） |
+
+### PWA必須ファイル
+
+| ファイル | 役割 |
+|----------|------|
+| `manifest.json` | アプリ名・アイコン・テーマカラー・表示モードを定義 |
+| `service-worker.js` | リソースのキャッシュ戦略・オフライン対応を実装 |
+| アイコン画像 | 192×192px / 512×512px の PNG（インストール時に使用） |
+
+### Workbox キャッシュ戦略
+
+| 対象 | 戦略 | 理由 |
+|------|------|------|
+| HTML / JS / CSS | Cache First | 静的リソースは変化が少ない |
+| Open-Meteo API | Network First（5分TTL） | 天気データは鮮度が重要 |
+| アイコン・画像 | Cache First | 変化しないため積極的にキャッシュ |
 
 ### Open-Meteo APIエンドポイント例
 
@@ -72,17 +91,21 @@ GET https://api.open-meteo.com/v1/forecast
 |--------|------|
 | お気に入り登録 | ユーザーが任意のテキストを服装メモとして保存する |
 | お気に入り一覧・削除 | 保存済みメモを一覧表示し個別に削除できる |
-| オフライン時エラー表示 | 通信不能時にユーザーへ明示的なエラーを表示する |
-| ローカルデータ永続化 | SharedPreferences / SQLiteで端末保存する |
+| オフライン時キャッシュ表示 | Service Workerが直前の天気データをキャッシュし、オフライン時も表示する |
+| ローカルデータ永続化 | localStorage でブラウザ内に保存する |
+| ホーム画面インストール | manifest.jsonによりAdd to Home Screenを促すバナーを表示する |
 
 ### 共通機能
 
 | 機能名 | 優先度 | 概要 |
 |--------|--------|------|
-| 位置情報取得（GPS） | 高 | 現在地の緯度・経度を端末から取得する |
-| ナビゲーション | 中 | 画面間の遷移（BottomNav等） |
+| 位置情報取得（Geolocation API） | 高 | ブラウザのGeolocation APIで現在地の緯度・経度を取得する |
+| Service Worker登録 | 高 | Workboxでキャッシュ戦略を実装しオフライン対応する |
+| Web App Manifest | 高 | アプリ名・アイコン・テーマカラーを定義しインストール可能にする |
+| ページナビゲーション | 中 | 画面間の遷移（React Router 等） |
+| インストールバナー | 中 | beforeinstallpromptイベントでAdd to Home Screenを促す |
 | ローディング表示 | 低 | API通信中のスピナー・スケルトン |
-| アプリアイコン・スプラッシュ | 低 | ストア申請・初回起動時の表示 |
+| ファビコン・OGP設定 | 低 | ブラウザタブのアイコンとSNSシェア時のメタ情報 |
 
 ---
 
@@ -95,12 +118,13 @@ GET https://api.open-meteo.com/v1/forecast
 | 機能名 | 内容 | 分類 |
 |--------|------|------|
 | 天気データ取得 | Open-Meteo APIから気温・湿度・天気状態を取得する | コア |
-| 位置情報取得 | 端末GPSから現在地の緯度・経度を取得する | コア |
+| 位置情報取得 | ブラウザのGeolocation APIで現在地の緯度・経度を取得する | コア |
 | 服装レコメンド表示 | 気象データをルールベースで判定し服装を提案する | コア |
 | 時間帯別提案 | 朝・昼・夜それぞれに異なる服装提案を表示する | コア |
 | お気に入り登録 | ユーザーが任意のテキストを服装メモとして保存する | サポート |
 | お気に入り一覧・削除 | 保存済みメモを一覧表示し個別に削除できる | サポート |
-| オフライン時エラー表示 | 通信不能時にユーザーへ明示的なエラーを表示する | サポート |
+| オフライン時キャッシュ表示 | Service Workerが直前の天気データを返し画面を表示する | サポート |
+| ホーム画面インストール | manifest.jsonとbeforeinstallpromptでインストールを促す | サポート |
 
 ### 非機能要求
 
@@ -110,46 +134,50 @@ GET https://api.open-meteo.com/v1/forecast
 
 | 要求 | 基準・根拠 |
 |------|-----------|
-| アプリ起動から天気表示まで3秒以内 | Open-Meteo応答速度 + GPS取得の合計を考慮 |
-| お気に入りの読み込みは即時（500ms以内） | ローカル保存のためAPI待ちなし |
+| ページ表示から天気表示まで3秒以内 | Open-Meteo応答速度 + Geolocation取得の合計を考慮 |
+| お気に入りの読み込みは即時（500ms以内） | localStorageはI/O待ちなしで読み込める |
 
 #### セキュリティ
 
 | 要求 | 基準・根拠 |
 |------|-----------|
-| 位置情報は端末外へ送信しない | Open-Meteoへの送信は緯度経度のみ・匿名 |
-| お気に入りデータは端末ローカルにのみ保存 | クラウド送信・外部共有なし |
-| 位置情報取得は初回起動時に許可を明示的に求める | iOS/Android OSの権限モデルに準拠 |
+| 位置情報はOpen-Meteo以外に送信しない | APIへの送信は緯度経度のみ・匿名 |
+| お気に入りデータはlocalStorageにのみ保存 | クラウド送信・外部共有なし |
+| 位置情報取得はブラウザの許可ダイアログを通じて行う | Geolocation APIの仕様に準拠（HTTPS必須） |
+| 本番環境はHTTPS必須 | Geolocation API・Service Workerの両方がHTTPS環境でのみ動作する |
+| Service Workerのスコープを `/` に限定する | 意図しないリソースへのインターセプトを防ぐ |
 
 #### ユーザビリティ
 
 | 要求 | 基準・根拠 |
 |------|-----------|
-| 主要操作は3タップ以内で完結する | 起動→天気確認、起動→お気に入り登録の両導線 |
+| 主要操作は3クリック以内で完結する | 起動→天気確認、起動→お気に入り登録の両導線 |
 | エラー・ローディング状態を必ず画面上に示す | 通信中スピナー、オフライン時メッセージ表示 |
-| iOS・Android両プラットフォームで同一UXを提供 | FlutterのクロスプラットフォームUIを活用 |
+| PC・スマホブラウザ両方でレスポンシブ対応する | CSSメディアクエリまたはTailwind CSSを活用 |
 
 #### 保守性
 
 | 要求 | 基準・根拠 |
 |------|-----------|
-| 服装提案ロジックを独立したファイルに分離する | ルール変更時にUI側を触らなくてよい構造 |
+| 服装提案ロジックを独立したファイルに分離する | ルール変更時にUIコンポーネントを触らなくてよい構造 |
 | APIのエンドポイントや閾値は定数として一元管理 | 変更箇所を1ファイルに集約し修正コストを下げる |
-| FlutterのWidget単位でコンポーネントを分割する | 再利用性と可読性の確保。テスト容易性にも寄与 |
+| ReactのコンポーネントをAtomicDesign等で分割する | 再利用性と可読性の確保。テスト容易性にも寄与 |
+| Service Workerのキャッシュバージョンを定数で管理する | デプロイ時にキャッシュを確実に更新できる構造 |
 
 ---
 
 ## 5. ユースケース
 
-アクターは3つ定義している。「ユーザー」が主アクター、「端末GPS」と「Open-Meteo API」が外部システムとしての副アクターとなる。
+アクターは3つ定義している。「ユーザー」が主アクター、「ブラウザGeolocation」と「Open-Meteo API」が外部システムとしての副アクターとなる。PWA対応によりオフライン時はService Workerがキャッシュを返すため、UC8はエラーではなくキャッシュ表示に変わる。
 
 ```mermaid
 flowchart LR
   User(["ユーザー"])
-  GPS(["端末GPS"])
+  GPS(["ブラウザ Geolocation API"])
   API(["Open-Meteo API"])
+  SW(["Service Worker"])
 
-  subgraph SYS ["天候と服装のシステム"]
+  subgraph SYS ["天候と服装のシステム（PWA）"]
     UC1["天気・気温・湿度を確認する"]
     UC2["服装レコメンドを見る"]
     UC3["時間帯別の服装提案を見る"]
@@ -157,7 +185,8 @@ flowchart LR
     UC5["お気に入り一覧を管理する"]
     UC6["位置情報を取得する"]
     UC7["天気データを取得する"]
-    UC8["エラーを表示する"]
+    UC8["キャッシュデータを返す（オフライン時）"]
+    UC9["ホーム画面にインストールする"]
   end
 
   User -->|uses| UC1
@@ -165,6 +194,7 @@ flowchart LR
   User -->|uses| UC3
   User -->|uses| UC4
   User -->|uses| UC5
+  User -->|uses| UC9
 
   UC1 -->|«include»| UC6
   UC1 -->|«include»| UC7
@@ -174,6 +204,7 @@ flowchart LR
 
   UC6 --- GPS
   UC7 --- API
+  UC8 --- SW
 ```
 
 ### 矢印の読み方
@@ -185,85 +216,103 @@ flowchart LR
 
 ## 6. クラス設計
 
+> Web版ではDartの型をJavaScript/TypeScriptの型に読み替える。`LocalStorage` クラスはブラウザの `window.localStorage` をラップした実装となる。PWA対応として `ServiceWorkerManager` と `InstallPromptManager` を追加している。
+
 ```mermaid
 classDiagram
   class Location {
-    +double latitude
-    +double longitude
-    +String cityName
-    +DateTime fetchedAt
-    +getCurrentLocation() Location
-    +isValid() bool
+    +number latitude
+    +number longitude
+    +string cityName
+    +Date fetchedAt
+    +getCurrentLocation() Promise~Location~
+    +isValid() boolean
   }
 
   class WeatherData {
-    +double temperature
-    +int humidity
-    +String condition
-    +DateTime observedAt
-    +List~HourlyForecast~ hourlyForecasts
-    +isStale() bool
+    +number temperature
+    +number humidity
+    +string condition
+    +Date observedAt
+    +HourlyForecast[] hourlyForecasts
+    +isStale() boolean
+    +isCached() boolean
   }
 
   class HourlyForecast {
-    +TimeOfDay time
-    +double temperature
-    +int humidity
-    +String condition
+    +string time
+    +number temperature
+    +number humidity
+    +string condition
   }
 
   class OutfitRecommendation {
-    +String morningOutfit
-    +String afternoonOutfit
-    +String eveningOutfit
-    +DateTime generatedAt
-    +getSummary() String
+    +string morningOutfit
+    +string afternoonOutfit
+    +string eveningOutfit
+    +Date generatedAt
+    +getSummary() string
   }
 
   class OutfitRule {
-    +double tempMin
-    +double tempMax
-    +int humidityMax
-    +String condition
-    +String suggestion
-    +matches(double temp, int humidity, String cond) bool
+    +number tempMin
+    +number tempMax
+    +number humidityMax
+    +string condition
+    +string suggestion
+    +matches(temp number, humidity number, cond string) boolean
   }
 
   class RecommendationEngine {
-    +List~OutfitRule~ rules
-    +generate(WeatherData weather) OutfitRecommendation
-    +selectRule(double temp, int humidity, String cond) OutfitRule
+    +OutfitRule[] rules
+    +generate(weather WeatherData) OutfitRecommendation
+    +selectRule(temp number, humidity number, cond string) OutfitRule
   }
 
   class FavoriteOutfit {
-    +String id
-    +String memo
-    +DateTime savedAt
-    +update(String memo) void
+    +string id
+    +string memo
+    +Date savedAt
+    +update(memo string) void
   }
 
   class FavoriteRepository {
-    +save(FavoriteOutfit item) void
-    +findAll() List~FavoriteOutfit~
-    +delete(String id) void
-    +findById(String id) FavoriteOutfit
+    +save(item FavoriteOutfit) void
+    +findAll() FavoriteOutfit[]
+    +delete(id string) void
+    +findById(id string) FavoriteOutfit
   }
 
   class WeatherRepository {
-    +fetchWeather(Location loc) WeatherData
+    +fetchWeather(loc Location) Promise~WeatherData~
     +getCached() WeatherData
     +clearCache() void
   }
 
   class WeatherService {
-    +baseUrl: String
-    +get(double lat, double lng) WeatherData
+    +baseUrl: string
+    +get(lat number, lng number) Promise~WeatherData~
   }
 
   class LocalStorage {
-    +write(String key, String value) void
-    +read(String key) String
-    +delete(String key) void
+    +set(key string, value string) void
+    +get(key string) string
+    +remove(key string) void
+  }
+
+  class ServiceWorkerManager {
+    +swPath: string
+    +cacheVersion: string
+    +register() Promise~void~
+    +unregister() Promise~void~
+    +onUpdateFound(callback Function) void
+  }
+
+  class InstallPromptManager {
+    +deferredPrompt: BeforeInstallPromptEvent
+    +isInstallable() boolean
+    +showPrompt() Promise~void~
+    +onInstalled(callback Function) void
   }
 
   WeatherData        "1"   *-- "1..*" HourlyForecast      : contains
@@ -296,18 +345,21 @@ sequenceDiagram
   autonumber
   actor User as ユーザー
   participant UI as ホーム画面
+  participant SW as Service Worker
   participant Ctrl as WeatherController
   participant Repo as WeatherRepository
   participant API as Open-Meteo API
   participant Eng as RecommendationEngine
 
-  User->>UI: アプリ起動
-  UI->>Ctrl: onInit()
+  User->>UI: ページを開く
+  UI->>SW: リソースリクエスト
+  SW-->>UI: キャッシュ済みHTML/JS/CSSを返す
+  UI->>Ctrl: useEffect / onMount()
   Ctrl->>Repo: getCurrentLocation()
   alt 位置情報の権限なし
-    Repo-->>Ctrl: PermissionDeniedError
+    Repo-->>Ctrl: GeolocationPermissionDenied
     Ctrl-->>UI: showPermissionDialog()
-    UI-->>User: 位置情報の許可を求める
+    UI-->>User: ブラウザの位置情報許可を求める
     User->>UI: 許可する
     UI->>Ctrl: retryWithPermission()
   end
@@ -315,25 +367,25 @@ sequenceDiagram
   alt キャッシュが有効（5分以内）
     Ctrl->>Repo: getCached()
     Repo-->>Ctrl: WeatherData
-  else キャッシュなし or 期限切れ
+  else オンライン・キャッシュ期限切れ
     Ctrl->>Repo: fetchWeather(Location)
-    Repo->>API: GET /forecast?lat&lng&hourly
-    alt ネットワークエラー
-      API-->>Repo: NetworkError
-      Repo-->>Ctrl: OfflineError
-      Ctrl-->>UI: showOfflineError()
-      UI-->>User: オフラインエラー表示
-    else 取得成功
-      API-->>Repo: JSON（3時間ごと予報）
-      Repo-->>Ctrl: WeatherData
+    Repo->>SW: fetch(/forecast?lat&lng)
+    alt オンライン
+      SW->>API: GET /forecast?lat&lng&hourly
+      API-->>SW: JSON（3時間ごと予報）
+      SW->>SW: Cache APIに保存（TTL:5分）
+      SW-->>Repo: WeatherData
+    else オフライン
+      SW-->>Repo: キャッシュ済みWeatherData（stale表示付き）
     end
+    Repo-->>Ctrl: WeatherData
   end
   Ctrl->>Eng: generate(WeatherData)
   loop 朝・昼・夜の各時間帯
     Eng->>Eng: selectRule(temp, humidity, condition)
   end
   Eng-->>Ctrl: OutfitRecommendation
-  Ctrl-->>UI: render(WeatherData, OutfitRecommendation)
+  Ctrl-->>UI: setState(WeatherData, OutfitRecommendation)
   UI-->>User: 天気＋時間帯別服装を表示
 ```
 
@@ -346,10 +398,10 @@ sequenceDiagram
   participant UI as お気に入り登録画面
   participant Ctrl as FavoriteController
   participant Repo as FavoriteRepository
-  participant DB as LocalStorage
+  participant DB as localStorage
 
-  User->>UI: 「お気に入りに追加」をタップ
-  UI-->>User: テキスト入力ダイアログを表示
+  User->>UI: 「お気に入りに追加」をクリック
+  UI-->>User: テキスト入力モーダルを表示
   User->>UI: 服装メモを入力して保存
   UI->>Ctrl: onSave(memo)
   alt メモが空
@@ -357,10 +409,10 @@ sequenceDiagram
     UI-->>User: 「メモを入力してください」
   else 入力あり
     Ctrl->>Repo: save(FavoriteOutfit)
-    Repo->>DB: write(id, memo, savedAt)
+    Repo->>DB: localStorage.setItem(id, JSON)
     DB-->>Repo: 保存完了
     Repo-->>Ctrl: success
-    Ctrl-->>UI: showSuccessMessage()
+    Ctrl-->>UI: showSuccessToast()
     UI-->>User: 「保存しました」トースト表示
   end
 ```
@@ -374,33 +426,33 @@ sequenceDiagram
   participant UI as お気に入り一覧画面
   participant Ctrl as FavoriteController
   participant Repo as FavoriteRepository
-  participant DB as LocalStorage
+  participant DB as localStorage
 
-  User->>UI: お気に入り画面を開く
-  UI->>Ctrl: onInit()
+  User->>UI: お気に入りページを開く
+  UI->>Ctrl: useEffect / onMount()
   Ctrl->>Repo: findAll()
-  Repo->>DB: read(favorites)
+  Repo->>DB: localStorage.getItem(favorites)
   DB-->>Repo: 保存済みデータ
   alt データなし
-    Repo-->>Ctrl: 空リスト
+    Repo-->>Ctrl: 空配列
     Ctrl-->>UI: showEmptyState()
     UI-->>User: 「まだ登録がありません」
   else データあり
-    Repo-->>Ctrl: List~FavoriteOutfit~
-    Ctrl-->>UI: render(list)
+    Repo-->>Ctrl: FavoriteOutfit[]
+    Ctrl-->>UI: setState(list)
     UI-->>User: お気に入り一覧を表示
   end
-  User->>UI: 削除ボタンをタップ
+  User->>UI: 削除ボタンをクリック
   UI->>Ctrl: onDelete(id)
   Ctrl->>Repo: delete(id)
-  Repo->>DB: delete(id)
+  Repo->>DB: localStorage.removeItem(id)
   DB-->>Repo: 削除完了
   Repo-->>Ctrl: success
   Ctrl->>Repo: findAll()
-  Repo->>DB: read(favorites)
+  Repo->>DB: localStorage.getItem(favorites)
   DB-->>Repo: 更新済みデータ
-  Repo-->>Ctrl: List~FavoriteOutfit~
-  Ctrl-->>UI: render(updatedList)
+  Repo-->>Ctrl: FavoriteOutfit[]
+  Ctrl-->>UI: setState(updatedList)
   UI-->>User: 一覧を更新して表示
 ```
 
@@ -412,13 +464,13 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Launching : アプリ起動
+  [*] --> Launching : ページ読み込み
 
   state Launching {
     [*] --> CheckingPermission : 初期化開始
     CheckingPermission --> PermissionGranted : 位置情報が許可済み
     CheckingPermission --> PermissionDenied : 権限なし
-    PermissionDenied --> PermissionGranted : ユーザーが許可
+    PermissionDenied --> PermissionGranted : ユーザーがブラウザ許可
     PermissionDenied --> [*] : ユーザーが拒否
     PermissionGranted --> [*] : 起動処理完了
   }
@@ -427,9 +479,9 @@ stateDiagram-v2
   Launching --> PermissionError : 権限を拒否
 
   state LoadingWeather {
-    [*] --> FetchingLocation : GPS取得開始
+    [*] --> FetchingLocation : Geolocation取得開始
     FetchingLocation --> FetchingAPI : 位置情報取得成功
-    FetchingLocation --> LocationError : GPS取得失敗
+    FetchingLocation --> LocationError : Geolocation取得失敗
     FetchingAPI --> WeatherLoaded : APIレスポンス受信
     FetchingAPI --> NetworkError : 通信エラー
     WeatherLoaded --> [*]
@@ -438,41 +490,43 @@ stateDiagram-v2
   }
 
   LoadingWeather --> HomeReady : 天気・服装提案の表示完了
-  LoadingWeather --> OfflineError : ネットワーク不通
-  LoadingWeather --> LocationError : GPS取得失敗
+  LoadingWeather --> HomeReadyCached : オフライン・キャッシュあり
+  LoadingWeather --> LocationError : Geolocation取得失敗
 
-  HomeReady --> LoadingWeather : 更新ボタンタップ / 5分経過
-  HomeReady --> FavoriteFlow : お気に入りタブをタップ
+  HomeReady --> LoadingWeather : 更新ボタンクリック / 5分経過
+  HomeReadyCached --> LoadingWeather : オンライン復帰 → 再取得
+  HomeReady --> FavoriteFlow : お気に入りタブをクリック
+  HomeReadyCached --> FavoriteFlow : お気に入りタブをクリック
 
   state FavoriteFlow {
     [*] --> FavoriteList : 一覧読み込み
-    FavoriteList --> AddingFavorite : 追加ボタンタップ
-    AddingFavorite --> Validating : 保存ボタンタップ
+    FavoriteList --> AddingFavorite : 追加ボタンクリック
+    AddingFavorite --> Validating : 保存ボタンクリック
     Validating --> FavoriteList : 保存成功
     Validating --> AddingFavorite : バリデーションエラー
-    FavoriteList --> DeletingFavorite : 削除ボタンタップ
+    FavoriteList --> DeletingFavorite : 削除ボタンクリック
     DeletingFavorite --> FavoriteList : 削除完了
     FavoriteList --> [*]
   }
 
-  FavoriteFlow --> HomeReady : ホームタブをタップ
-  OfflineError --> LoadingWeather : 再試行ボタンタップ
-  PermissionError --> [*] : アプリ終了
-  HomeReady --> [*] : アプリ終了
+  FavoriteFlow --> HomeReady : ホームタブをクリック
+  PermissionError --> [*] : ページを閉じる
+  HomeReady --> [*] : ページを閉じる
+  HomeReadyCached --> [*] : ページを閉じる
 ```
 
 ### 天気データ（WeatherData）
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Absent : アプリ初回起動
+  [*] --> Absent : ページ初回読み込み
 
   Absent --> Fetching : fetchWeather()呼び出し
 
   state Fetching {
-    [*] --> ResolvingLocation : GPS取得中
+    [*] --> ResolvingLocation : Geolocation取得中
     ResolvingLocation --> CallingAPI : 位置情報取得成功
-    ResolvingLocation --> LocationFailed : GPS取得失敗
+    ResolvingLocation --> LocationFailed : Geolocation取得失敗
     CallingAPI --> Parsing : HTTPレスポンス200
     CallingAPI --> NetworkFailed : 通信エラー / タイムアウト
     Parsing --> [*] : パース完了
@@ -480,12 +534,16 @@ stateDiagram-v2
     NetworkFailed --> [*]
   }
 
-  Fetching --> Fresh : データ取得・保存成功
-  Fetching --> Error : 取得失敗
+  Fetching --> Fresh : データ取得・キャッシュ保存成功（Service Worker）
+  Fetching --> Cached : オフライン・Service Workerキャッシュあり
+  Fetching --> Error : オフライン・キャッシュなし
 
   Fresh --> Fresh : キャッシュ参照（5分以内）
   Fresh --> Stale : 5分経過
   Fresh --> Fetching : 手動更新
+
+  Cached --> Fetching : オンライン復帰
+  Cached --> Stale : 5分経過
 
   Stale --> Fetching : fetchWeather()呼び出し
   Stale --> Stale : キャッシュ参照（期限切れ表示付き）
@@ -493,7 +551,8 @@ stateDiagram-v2
   Error --> Fetching : 再試行
   Error --> Absent : キャッシュクリア
 
-  note right of Fresh : isStale() = false / キャッシュ有効
+  note right of Fresh : isStale() = false / SW Cache有効
+  note right of Cached : isCached() = true / オフライン表示
   note right of Stale : isStale() = true / 再取得が必要
 ```
 
@@ -501,36 +560,36 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Idle : お気に入り画面を開く
+  [*] --> Idle : お気に入りページを開く
 
   Idle --> Loading : findAll()呼び出し
 
   state Loading {
-    [*] --> ReadingStorage : LocalStorage読み込み中
+    [*] --> ReadingStorage : localStorage読み込み中
     ReadingStorage --> [*] : 読み込み完了
   }
 
   Loading --> Empty : データ件数 = 0
   Loading --> Listed : データ件数 ≥ 1
 
-  Empty --> Adding : 追加ボタンタップ
-  Listed --> Adding : 追加ボタンタップ
-  Listed --> Deleting : 削除ボタンタップ
+  Empty --> Adding : 追加ボタンクリック
+  Listed --> Adding : 追加ボタンクリック
+  Listed --> Deleting : 削除ボタンクリック
 
   state Adding {
-    [*] --> InputOpen : ダイアログ表示
-    InputOpen --> Validating : 保存ボタンタップ
+    [*] --> ModalOpen : モーダル表示
+    ModalOpen --> Validating : 保存ボタンクリック
     Validating --> Saving : 入力あり（バリデーション通過）
-    Validating --> InputOpen : 入力なし（バリデーションエラー）
-    Saving --> [*] : write()完了
-    InputOpen --> [*] : キャンセル
+    Validating --> ModalOpen : 入力なし（バリデーションエラー）
+    Saving --> [*] : localStorage.setItem()完了
+    ModalOpen --> [*] : キャンセル
   }
 
   state Deleting {
     [*] --> ConfirmingDelete : 削除確認ダイアログ表示
     ConfirmingDelete --> Removing : 削除を確定
     ConfirmingDelete --> [*] : キャンセル
-    Removing --> [*] : delete()完了
+    Removing --> [*] : localStorage.removeItem()完了
   }
 
   Adding --> Loading : 保存完了 → 再読み込み
@@ -538,8 +597,8 @@ stateDiagram-v2
   Deleting --> Loading : 削除完了 → 再読み込み
   Deleting --> Listed : キャンセル
 
-  Empty --> [*] : 画面を離れる
-  Listed --> [*] : 画面を離れる
+  Empty --> [*] : ページを離れる
+  Listed --> [*] : ページを離れる
 ```
 
 ---
