@@ -2,7 +2,7 @@
   "name": "天候と服装のシステム",
   "short_name": "天候と服装",
   "description": "天気・気温・湿度をもとに服装を提案するPWA",
-  "start_url": "/",
+  "start_url": "/apri/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#4a90d9",

@@ -9,7 +9,7 @@ if (!root) throw new Error('#root element not found')
 
 createRoot(root).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename="/apri">
       <App />
     </BrowserRouter>
   </StrictMode>
